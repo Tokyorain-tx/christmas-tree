@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>圣诞树</title>
+<style>
+*{margin:0;padding:0}
+body{overflow:hidden;background:#000}
+canvas{display:block;width:100vw;height:100vh}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const gl = c.getContext("webgl");
+const v = gl.createShader(gl.VERTEX_SHADER);
+gl.shaderSource(v,`attribute vec2 p;void main(){gl_Position=vec4(p,0,1);}`);
+gl.compileShader(v);
+const f = gl.createShader(gl.FRAGMENT_SHADER);
+gl.shaderSource(f,`precision highp float;uniform vec2 r;uniform float t;uniform float z;
+float hash21(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}
+float vnoise(vec2 p){vec2 i=floor(p),f=fract(p);vec2 u=f*f*(3.-2.*f);return mix(mix(hash21(i),hash21(i+vec2(1,0)),u.x),mix(hash21(i+vec2(0,1)),hash21(i+vec2(1,1)),u.x),u.y);}
+const float Y_TOP=0.45,Y_BOT=-0.35,R_MAX=0.5;
+float get_radius(float y){if(y>Y_TOP||y<Y_BOT)return 0.;float k=(Y_TOP-y)/(Y_TOP-Y_BOT);return k*R_MAX*(1.+0.1*sin(k*3.14));}
+vec3 cycle_color(float t){float ph=fract(t);vec3 cy=vec3(1,.72,.12),cg=vec3(.2,1,.3),cr=vec3(1,.1,.08);if(ph<.333)return mix(cy,cg,smoothstep(0.,.333,ph));if(ph<.666)return mix(cg,cr,smoothstep(.333,.666,ph));return mix(cr,cy,smoothstep(.666,1.,ph));}
+vec3 top_star(vec2 p,float t,vec3 tint){vec2 d=p-vec2(0,Y_TOP+0.05);float r=length(d);float ang=t*0.5;vec2 dr=mat2(cos(ang),-sin(ang),sin(ang),cos(ang))*d;float core=exp(-r*r/(0.008*0.008))*3.;float glow=exp(-r*15.)*1.5;float rx=exp(-abs(dr.x)/0.004)*exp(-abs(dr.y)*10.)*1.2;float ry=exp(-abs(dr.y)/0.004)*exp(-abs(dr.x)*10.)*1.2;float flick=0.9+0.1*sin(t);vec3 base=mix(vec3(1,.88,.55),tint,.8);vec3 halo=mix(base,vec3(1,.95,.85),.25);return (base*core+halo*(glow+rx+ry))*flick;}
+void main(){vec2 uv=(gl_FragCoord.xy-.5*r)/r.y;uv/=z;uv.y+=0.12;float tm=t;vec3 bc=cycle_color(tm*0.12);vec3 col=mix(vec3(.005,.01,.03),vec3(.02,.05,.1),smoothstep(-0.4,.5,uv.y));vec2 scell=floor(uv*100.);float sh=hash21(scell);float smask=smoothstep(.985,.995,sh);if(smask>0.){vec2 fr=fract(uv*100.);float d=length(fr-.5);float sg=exp(-d*12.);float ph=hash21(scell+19.19)*6.28;float fw=.5+.5*sin(tm*1.5+ph);vec3 stc=mix(vec3(.85,.9,1),vec3(1,.92,.8),hash21(scell+3.7));col+=stc*sg*(.35+.65*fw)*smask;}float tr=get_radius(uv.y);if(abs(uv.x)<tr){float lz=sqrt(max(0.,tr*tr-uv.x*uv.x));float ln=lz/max(tr,0.001);float a=atan(uv.x,lz);float sp=a*4.+(Y_TOP-uv.y)*25.-tm*2.;float line=pow(max(0.,sin(sp)),32.);float glw=exp(-abs(sin(sp))*5.)*.5;vec3 lc=bc;float pulse=pow(.5+.5*sin((Y_TOP-uv.y)*30.-tm*8.),4.);lc+=lc*pulse*.8;col+=lc*(line*4.+glw)*smoothstep(-.2,.5,ln);}col+=top_star(uv,tm,bc);vec2 lt=uv-vec2(0,0.575);lt.x-=lt.y*0.5;float tw=0.078*(720./72.);vec2 tuv=lt/vec2(tw,0.078)+0.5;float mask=0.;if(tuv.x>=0.&&tuv.x<=1.&&tuv.y>=0.&&tuv.y<=1.){vec2 s=tuv*vec2(12.,1.);float c=floor(s.x),f=fract(s.x);if(c>=0.&&c<12.){float ch=0.;if(c==0.)ch=77.;if(c==1.)ch=101.;if(c==2.)ch=114.;if(c==3.)ch=114.;if(c==4.)ch=121.;if(c==5.)ch=32.;if(c==6.)ch=67.;if(c==7.)ch=104.;if(c==8.)ch=114.;if(c==9.)ch=105.;if(c==10.)ch=115.;if(c==11.)ch=116.;float cx=fract(ch/16.),cy=floor(ch/16.)/16.;vec2 b=vec2(cx,cy)+vec2(f,0.5)*vec2(1./16.,1./16.);float r=length(b-vec2(.5));mask=1.-smoothstep(.45,.5,r);}}if(mask>0.01){float br=.75+.25*sin(tm*1.5);float sw=fract(tm*0.2);float dx=tuv.x-sw;float swg=exp(-dx*dx*260.)*2.5;col+=bc*mask*(1.5*br+swg);}for(int i=0;i<50;i++){float fi=float(i);float sx=hash21(vec2(fi,0.))*2.-1.;float sp=0.1+hash21(vec2(fi,1.))*0.15;float sy=0.6-mod(tm*sp+hash21(vec2(fi,2.))*1.5,1.5);float wb=sin(tm*0.8+fi)*0.03;float sd=length(uv-vec2(sx+wb,sy));float sz=200.+hash21(vec2(fi,3.))*300.;col+=vec3(.9,.95,1.)*exp(-sd*sz)*0.8;}float br=dot(col,vec3(.299,.587,.114));if(br>0.6)col+=col*(br-0.6)*1.2;float vig=1.-length(uv*.7)*0.5;col*=vig;gl_FragColor=vec4(col,1);}`);
+gl.compileShader(f);
+const p=gl.createProgram();gl.attachShader(p,v);gl.attachShader(p,f);gl.linkProgram(p);
+const buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+const a=gl.getAttribLocation(p,"p");gl.vertexAttribPointer(a,2,gl.FLOAT,false,0,0);gl.enableVertexAttribArray(a);
+const ur=gl.getUniformLocation(p,"r"),ut=gl.getUniformLocation(p,"t"),uz=gl.getUniformLocation(p,"z");
+let z=1.;
+function draw(){const w=c.width=innerWidth,h=c.height=innerHeight;gl.viewport(0,0,w,h);gl.useProgram(p);gl.uniform2f(ur,w,h);gl.uniform1f(ut,performance.now()/1000);gl.uniform1f(uz,z);gl.drawArrays(gl.TRIANGLES,0,3);requestAnimationFrame(draw);}
+addEventListener("wheel",e=>{z*=1.+e.deltaY*0.001;z=Math.max(0.5,Math.min(3,z));});
+draw();
+</script>
+</body>
+</html>
